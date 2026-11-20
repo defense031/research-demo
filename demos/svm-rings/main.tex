@@ -1,0 +1,81 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{WestPoint}
+\usepackage{booktabs}
+\input{tables/numbers.tex}
+
+\title{Support Vector Machines}
+\subtitle{Separating two rings with the kernel trick}
+\author{Austin Semmel}
+\institute{Department of Mathematical Sciences\\United States Military Academy}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{The problem}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}\centering
+      \includegraphics<1>[height=0.70\textheight]{figures/rings_2d.pdf}%
+      \includegraphics<2>[height=0.70\textheight]{figures/rings_2d_line.pdf}%
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \item \textbf{Data:} \npts{} points on two noisy rings, one inside the other
+        \item \textbf{Split:} \ntrain{} points train the SVM; \ntest{} held-out points test it
+        \item<2-> \textbf{Best straight line:} a linear SVM rates \acctwo{} of
+          held-out points correctly, close to a coin flip
+        \item<2-> Every line leaves part of the inner ring on the outer ring's side
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+% Eleven overlays: the camera tilts from a top view into 3D, then the plane
+% appears. In full-screen Acrobat the timings play it on their own.
+\begin{frame}{Lift to 3D}
+  \transduration<1-10>{0.25}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}\centering
+      \input{tables/lift_frames.tex}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \item Give every point a height:
+          \[ \varphi(x_1, x_2) = \bigl(x_1,\ x_2,\ x_1^2 + x_2^2\bigr) \]
+        \item Points far from the center rise higher, so the outer ring sits
+          above the inner ring
+        \item<11-> \textbf{A flat plane now separates them.} A linear SVM on the
+          lifted points rates \accthree{} of held-out points correctly
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Back to 2D}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}\centering
+      \includegraphics[height=0.70\textheight]{figures/rings_back.pdf}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \item The plane cuts the bowl in a circle, so the boundary in 2D is a circle
+        \item Only \nsv{} support vectors set that boundary
+      \end{itemize}
+      \vspace{0.3em}
+      \centering{\small\input{tables/accuracy.tex}}
+      \vspace{0.2em}
+      \begin{block}{The kernel trick}
+        A kernel $K(\mathbf{x}, \mathbf{x}') = \varphi(\mathbf{x}) \cdot \varphi(\mathbf{x}')$
+        gives the SVM this lift without computing $\varphi$.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\end{document}
