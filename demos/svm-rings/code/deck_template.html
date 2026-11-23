@@ -1,0 +1,405 @@
+<!doctype html>
+<!-- Template. code/svm_rings.R fills in the data and images and writes ../index.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support Vector Machines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#1B1B18; --gold:#B5985A; --gold-deep:#8F7640; --gray:#8C8C8C;
+    --light:#F4F1EA; --red:#B22222; --ink:#1B1B18; --ink-soft:#4A4740;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0E0E0C;overflow:hidden}
+  body{font-family:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+  #stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;
+    transform-origin:center center;background:#fff;overflow:hidden}
+  .slide{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .45s ease}
+  .slide.on{opacity:1;pointer-events:auto}
+
+  /* title bar and footer */
+  .bar{height:84px;background:var(--black);color:#fff;display:flex;align-items:center;
+    padding:0 44px;font-weight:700;font-size:36px;letter-spacing:.01em;border-bottom:4px solid var(--gold)}
+  .foot{position:absolute;left:0;right:0;bottom:0;height:46px;display:flex;align-items:center;
+    padding:0 26px;font-size:15px;color:var(--gray)}
+  .foot img{height:30px}
+  .foot .mid{flex:1;text-align:center}
+  .foot .num{color:var(--gold);font-weight:700}
+  .body{position:absolute;top:88px;bottom:46px;left:0;right:0;display:grid;
+    grid-template-columns:600px 1fr;gap:28px;align-items:center;padding:0 44px}
+  .plot{display:flex;justify-content:center;align-items:center;position:relative}
+  canvas{display:block}
+
+  ul{list-style:none;margin:0;padding:0}
+  li{position:relative;padding-left:26px;margin:0 0 20px;font-size:25px;line-height:1.38;
+    transition:opacity .5s ease, transform .5s ease}
+  li::before{content:"";position:absolute;left:0;top:.5em;width:11px;height:11px;background:var(--gold)}
+  li.later{opacity:0;transform:translateY(8px)}
+  li.later.shown{opacity:1;transform:none}
+  b{font-weight:700}
+  .math{font-family:"Source Serif 4",Georgia,serif;font-style:italic;font-size:27px;
+    display:block;text-align:center;margin:10px 0 4px;color:var(--ink)}
+  .math .up{font-style:normal}
+
+  /* title slide */
+  #s0{display:flex;align-items:center;gap:60px;padding:0 110px}
+  #s0 img{width:290px}
+  #s0 h1{font-size:62px;margin:0 0 6px;font-weight:700;line-height:1.05}
+  #s0 .sub{font-size:30px;color:var(--gold);margin:0 0 18px}
+  #s0 .rule{height:3px;background:var(--gold);width:600px;margin-bottom:22px}
+  #s0 .who{font-size:24px;margin:0 0 4px}
+  #s0 .inst{font-size:20px;color:var(--gray);line-height:1.4}
+
+  table{border-collapse:collapse;font-size:21px;margin:6px 0 22px}
+  th,td{padding:7px 18px}
+  thead th{border-top:2px solid var(--ink);border-bottom:1px solid var(--ink);text-align:left}
+  tbody tr:last-child td{border-bottom:2px solid var(--ink)}
+  td.n{text-align:center;font-weight:600}
+  .block{background:var(--light);border-radius:6px;overflow:hidden;font-size:21px;line-height:1.4}
+  .block h4{margin:0;background:var(--black);color:#fff;font-size:20px;padding:6px 14px;font-weight:600}
+  .block p{margin:0;padding:10px 14px}
+
+  .hint{position:absolute;right:16px;bottom:52px;font-size:13px;color:var(--gray)}
+  .replay{position:absolute;left:50%;bottom:4px;translate:-50% 0;font:inherit;font-size:14px;
+    background:#fff;border:1px solid var(--gray);border-radius:4px;color:var(--ink-soft);
+    padding:3px 10px;cursor:pointer}
+  .replay:hover{border-color:var(--gold);color:var(--gold-deep)}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 1 -->
+  <section class="slide" id="s0">
+    <img src="{{CREST}}" alt="USMA crest">
+    <div>
+      <h1>Support Vector Machines</h1>
+      <p class="sub">Separating two rings with the kernel trick</p>
+      <div class="rule"></div>
+      <p class="who">Austin Semmel</p>
+      <p class="inst">Department of Mathematical Sciences<br>United States Military Academy</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" id="s1">
+    <div class="bar">The problem</div>
+    <div class="body">
+      <div class="plot"><canvas id="c1"></canvas></div>
+      <ul>
+        <li><b>Data:</b> <span data-k="n"></span> points on two noisy rings, one inside the other</li>
+        <li><b>Split:</b> <span data-k="ntrain"></span> points train the SVM; <span data-k="ntest"></span> held-out points test it</li>
+        <li class="later" data-step="1"><b>Best straight line:</b> a linear SVM rates <span data-k="acc2d"></span>% of held-out points correctly, close to a coin flip</li>
+        <li class="later" data-step="1">Every line leaves part of the inner ring on the outer ring's side</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" id="s2">
+    <div class="bar">Lift to 3D</div>
+    <div class="body">
+      <div class="plot"><canvas id="c2"></canvas>
+        <button class="replay" id="replay">↻ replay · drag to rotate</button></div>
+      <ul>
+        <li>Give every point a height:
+          <span class="math">φ(x<sub>1</sub>, x<sub>2</sub>) <span class="up">=</span> (x<sub>1</sub>, x<sub>2</sub>, x<sub>1</sub><sup>2</sup> + x<sub>2</sub><sup>2</sup>)</span></li>
+        <li>Points far from the center rise higher, so the outer ring sits above the inner ring</li>
+        <li class="later" data-step="1"><b>A flat plane now separates them.</b> A linear SVM on the lifted points rates <span data-k="acc3d"></span>% of held-out points correctly</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" id="s3">
+    <div class="bar">Back to 2D</div>
+    <div class="body">
+      <div class="plot"><canvas id="c3"></canvas></div>
+      <div>
+        <ul>
+          <li>The plane cuts the bowl in a circle, so the boundary in 2D is a circle</li>
+          <li>Only <span data-k="nsv"></span> support vectors set that boundary</li>
+        </ul>
+        <table>
+          <thead><tr><th>Linear SVM on</th><th>Held-out correct</th></tr></thead>
+          <tbody>
+            <tr><td>(x<sub>1</sub>, x<sub>2</sub>)</td><td class="n"><span data-k="acc2d"></span>%</td></tr>
+            <tr><td>(x<sub>1</sub>, x<sub>2</sub>, x<sub>1</sub><sup>2</sup> + x<sub>2</sub><sup>2</sup>)</td><td class="n"><span data-k="acc3d"></span>%</td></tr>
+          </tbody>
+        </table>
+        <div class="block"><h4>The kernel trick</h4>
+          <p>A kernel K(<b>x</b>, <b>x</b>′) = φ(<b>x</b>) · φ(<b>x</b>′) gives the SVM this lift without computing φ.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot"><img src="{{MULE}}" alt="Math Mule"><span class="mid">Support Vector Machines</span><span class="num" id="num">1</span></div>
+  <div class="hint">→ / space: next · ←: back · R: replay</div>
+</div>
+
+<script>
+/*SVM_DATA*/
+</script>
+<script>
+(function(){
+  var D = window.SVM;
+  var P = D.points, N = P.x1.length;
+  var COL = {inner:"#B5985A", outer:"#2B2B28"}, RED = "#B22222";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.querySelectorAll("[data-k]").forEach(function(el){ el.textContent = D[el.getAttribute("data-k")]; });
+
+  /* ---------- stage scaling ---------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    var s = Math.min(window.innerWidth/1280, window.innerHeight/720);
+    stage.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit); fit();
+
+  /* ---------- canvases (sharp on retina) ---------- */
+  function setup(id, w, h){
+    var c = document.getElementById(id), r = Math.max(2, window.devicePixelRatio || 1);
+    c.width = w*r; c.height = h*r; c.style.width = w+"px"; c.style.height = h+"px";
+    var ctx = c.getContext("2d"); ctx.scale(r, r);
+    return {c:c, ctx:ctx, w:w, h:h};
+  }
+  var C1 = setup("c1", 560, 582), C2 = setup("c2", 500, 582), C3 = setup("c3", 560, 582);
+
+  // wrongA > 0 adds a "rated incorrectly" key (a red ring) at that opacity
+  function legend(ctx, w, open, wrongA){
+    ctx.font = "600 20px 'Source Sans 3', sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    var items = [["inner",COL.inner],["outer",COL.outer]], x = w/2 - (wrongA ? 190 : 95);
+    items.forEach(function(it){
+      ctx.beginPath(); ctx.arc(x, 16, 6, 0, 2*Math.PI);
+      if(open){ ctx.fillStyle="#fff"; ctx.fill(); ctx.lineWidth=2.2; ctx.strokeStyle=it[1]; ctx.stroke(); }
+      else { ctx.fillStyle=it[1]; ctx.fill(); }
+      ctx.fillStyle = "#1B1B18"; ctx.fillText(it[0], x+12, 16); x += 110;
+    });
+    if(wrongA){
+      ctx.globalAlpha = wrongA;
+      ctx.beginPath(); ctx.arc(x, 16, 9, 0, 2*Math.PI); ctx.lineWidth = 2.6; ctx.strokeStyle = RED; ctx.stroke();
+      ctx.fillStyle = "#1B1B18"; ctx.fillText("rated incorrectly", x+16, 16);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* ---------- 2D plot ---------- */
+  var LIM = 2.9;
+  function frame2D(S){
+    var ctx = S.ctx, L = 62, T = 40, size = S.w - L - 14;
+    var sx = function(x){ return L + (x + LIM) / (2*LIM) * size; };
+    var sy = function(y){ return T + (LIM - y) / (2*LIM) * size; };
+    return {ctx:ctx, L:L, T:T, size:size, sx:sx, sy:sy};
+  }
+  function axes(F){
+    var ctx = F.ctx;
+    ctx.strokeStyle = "#E6E3DC"; ctx.lineWidth = 1;
+    ctx.fillStyle = "#4A4740"; ctx.font = "18px 'Source Sans 3', sans-serif";
+    for(var v=-2; v<=2; v++){
+      ctx.beginPath(); ctx.moveTo(F.sx(v), F.T); ctx.lineTo(F.sx(v), F.T+F.size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(F.L, F.sy(v)); ctx.lineTo(F.L+F.size, F.sy(v)); ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(v, F.sx(v), F.T+F.size+6);
+      ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(v, F.L-8, F.sy(v));
+    }
+    ctx.font = "italic 22px 'Source Serif 4', Georgia, serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("x₁", F.L + F.size/2, F.T+F.size+28);
+    ctx.save(); ctx.translate(16, F.T+F.size/2); ctx.rotate(-Math.PI/2); ctx.textBaseline="middle";
+    ctx.fillText("x₂", 0, 0); ctx.restore();
+  }
+  function dot(ctx, x, y, col, r, open, alpha){
+    ctx.globalAlpha = alpha == null ? 0.85 : alpha;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2*Math.PI);
+    if(open){ ctx.fillStyle="#fff"; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle=col; ctx.stroke(); }
+    else { ctx.fillStyle=col; ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+
+  // line2d: w . x = rho. As t runs 0 -> 1 the line draws left to right, the two
+  // sides shade in the class each side is rated as, and every point on the
+  // wrong side gets a red ring.
+  var L2 = D.line2d, NEG2 = L2.pos_class === "inner" ? "outer" : "inner";
+  function side2(x, y){ return L2.w[0]*x + L2.w[1]*y - L2.rho > 0 ? L2.pos_class : NEG2; }
+  var WRONG2 = [];
+  for(var j=0;j<P.x1.length;j++) WRONG2[j] = side2(P.x1[j], P.x2[j]) !== P.ring[j];
+  function drawProblem(t){
+    var S = C1, F = frame2D(S), ctx = S.ctx, w = L2.w, rho = L2.rho;
+    var y = function(x){ return (rho - w[0]*x) / w[1]; };
+    ctx.clearRect(0,0,S.w,S.h); legend(ctx, S.w, false, t);
+    if(t > 0){
+      // shade: the whole square in the negative side's class, then the positive half-plane
+      var big = 50, nx = w[0], ny = w[1], nl = Math.hypot(nx, ny); nx /= nl; ny /= nl;
+      var a1 = [-big, y(-big)], a2 = [big, y(big)];
+      ctx.save(); ctx.beginPath(); ctx.rect(F.L, F.T, F.size, F.size); ctx.clip();
+      ctx.globalAlpha = 0.20*t; ctx.fillStyle = COL[NEG2]; ctx.fillRect(F.L, F.T, F.size, F.size);
+      ctx.globalAlpha = 1; ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.moveTo(F.sx(a1[0]), F.sy(a1[1])); ctx.lineTo(F.sx(a2[0]), F.sy(a2[1]));
+      ctx.lineTo(F.sx(a2[0]+nx*big), F.sy(a2[1]+ny*big)); ctx.lineTo(F.sx(a1[0]+nx*big), F.sy(a1[1]+ny*big));
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 0.20*t; ctx.fillStyle = COL[L2.pos_class]; ctx.fill();
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+    axes(F);
+    for(var i=0;i<N;i++) dot(ctx, F.sx(P.x1[i]), F.sy(P.x2[i]), COL[P.ring[i]], 4.2);
+    if(t > 0){
+      ctx.globalAlpha = t; ctx.lineWidth = 2.4; ctx.strokeStyle = RED;
+      for(i=0;i<N;i++) if(WRONG2[i]){ ctx.beginPath(); ctx.arc(F.sx(P.x1[i]), F.sy(P.x2[i]), 8, 0, 2*Math.PI); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      var x0 = -LIM, x1 = -LIM + 2*LIM*t;
+      ctx.save(); ctx.beginPath(); ctx.rect(F.L, F.T, F.size, F.size); ctx.clip();
+      ctx.setLineDash([12,8]); ctx.lineWidth = 3.5; ctx.strokeStyle = RED;
+      ctx.beginPath(); ctx.moveTo(F.sx(x0), F.sy(y(x0))); ctx.lineTo(F.sx(x1), F.sy(y(x1))); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /* ---------- 3D view: the same projection as the Beamer frames ---------- */
+  var ZS = 0.55, PW = D.plane.w, PR = D.plane.rho;
+  function planeZ(x, y){ return (PR - PW[0]*x - PW[1]*y) / PW[2]; }
+  var Z = [], ABOVE = [];
+  for(var i=0;i<N;i++){ Z[i] = P.x1[i]*P.x1[i] + P.x2[i]*P.x2[i]; ABOVE[i] = Z[i] > planeZ(P.x1[i], P.x2[i]); }
+  function proj(x, y, z, tilt, az){
+    var X = x*Math.cos(az) - y*Math.sin(az), Y = x*Math.sin(az) + y*Math.cos(az);
+    return {sx: X, sy: Y*Math.cos(tilt) + ZS*z*Math.sin(tilt), d: Y*Math.sin(tilt) - ZS*z*Math.cos(tilt)};
+  }
+  function draw3D(tilt, az, planeA){
+    var S = C2, ctx = S.ctx;
+    ctx.clearRect(0,0,S.w,S.h); legend(ctx, S.w);
+    var xr = [-3.3, 3.3], yr = [-3.2, 5.0], top = 40;
+    var k = Math.min(S.w/(xr[1]-xr[0]), (S.h-top)/(yr[1]-yr[0]));
+    var X = function(v){ return S.w/2 + v*k; }, Y = function(v){ return top + (yr[1]-v)*k; };
+    var sq = [[-LIM,-LIM],[LIM,-LIM],[LIM,LIM],[-LIM,LIM]];
+    function poly(z, fill, stroke, a){
+      ctx.beginPath();
+      sq.forEach(function(c, j){
+        var p = proj(c[0], c[1], typeof z === "function" ? z(c[0], c[1]) : z, tilt, az);
+        j ? ctx.lineTo(X(p.sx), Y(p.sy)) : ctx.moveTo(X(p.sx), Y(p.sy));
+      });
+      ctx.closePath();
+      if(fill){ ctx.globalAlpha = a; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = Math.min(1, a*3.5); }
+      ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    poly(0, null, "#CFCBC2", 1);                               // floor
+    var pts = [];
+    for(var i=0;i<N;i++){ var p = proj(P.x1[i], P.x2[i], Z[i], tilt, az); pts.push({i:i, p:p}); }
+    pts.sort(function(a,b){ return b.p.d - a.p.d; });            // far to near
+    function drawSet(test){ pts.forEach(function(o){ if(test(o.i)) dot(ctx, X(o.p.sx), Y(o.p.sy), COL[P.ring[o.i]], 4.0); }); }
+    if(planeA > 0){
+      drawSet(function(i){ return !ABOVE[i]; });
+      poly(planeZ, RED, RED, 0.22*planeA);
+      drawSet(function(i){ return ABOVE[i]; });
+    } else drawSet(function(){ return true; });
+  }
+
+  /* ---------- back to 2D: the plane meets the bowl in a circle ---------- */
+  // w1 x + w2 y + w3 (x^2 + y^2) = rho  ->  circle with this center and radius
+  var cx = -PW[0]/(2*PW[2]), cy = -PW[1]/(2*PW[2]);
+  var cr = Math.sqrt(cx*cx + cy*cy + PR/PW[2]);
+  var fCenter = PW[0]*cx + PW[1]*cy + PW[2]*(cx*cx+cy*cy) - PR;
+  var other = D.plane.pos_class === "inner" ? "outer" : "inner";
+  var insideClass = fCenter > 0 ? D.plane.pos_class : other;
+  var outsideClass = insideClass === "inner" ? "outer" : "inner";
+  function drawBack(t){
+    var S = C3, F = frame2D(S), ctx = S.ctx;
+    ctx.clearRect(0,0,S.w,S.h); legend(ctx, S.w, true);
+    ctx.save(); ctx.beginPath(); ctx.rect(F.L, F.T, F.size, F.size); ctx.clip();
+    ctx.globalAlpha = 0.16; ctx.fillStyle = COL[outsideClass]; ctx.fillRect(F.L, F.T, F.size, F.size);
+    var R = cr / (2*LIM) * F.size;
+    ctx.beginPath(); ctx.arc(F.sx(cx), F.sy(cy), R, 0, 2*Math.PI);
+    ctx.fillStyle = "#fff"; ctx.globalAlpha = 1; ctx.fill();
+    ctx.fillStyle = COL[insideClass]; ctx.globalAlpha = 0.22; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.restore();
+    axes(F);
+    for(var i=0;i<N;i++) if(P.set[i] === "train") dot(ctx, F.sx(P.x1[i]), F.sy(P.x2[i]), COL[P.ring[i]], 3.4, false, 0.45);
+    for(i=0;i<N;i++) if(P.set[i] === "test") dot(ctx, F.sx(P.x1[i]), F.sy(P.x2[i]), COL[P.ring[i]], 5.2, true, 1);
+    ctx.beginPath(); ctx.arc(F.sx(cx), F.sy(cy), R, -Math.PI/2, -Math.PI/2 + 2*Math.PI*t);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = RED; ctx.stroke();
+  }
+
+  /* ---------- tweens ---------- */
+  var anim = null;
+  function tween(ms, fn, done){
+    if(anim) cancelAnimationFrame(anim.id);
+    if(reduced){ fn(1); if(done) done(); return; }
+    var t0 = performance.now();
+    anim = {id: 0};
+    (function tick(now){
+      var t = Math.max(0, Math.min(1, (now - t0)/ms)), e = t<.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+      fn(e);
+      if(t < 1) anim.id = requestAnimationFrame(tick); else { anim = null; if(done) done(); }
+    })(t0);
+  }
+
+  var TILT = 68*Math.PI/180, AZ = 25*Math.PI/180;
+  var view = {tilt:0, az:0, plane:0};
+  function playLift(){
+    view.plane = 0;
+    document.querySelectorAll("#s2 li.later").forEach(function(li){ li.classList.remove("shown"); });
+    tween(3600, function(e){ view.tilt = TILT*e; view.az = AZ*e; draw3D(view.tilt, view.az, 0); });
+    steps[2] = 0;
+  }
+  // finishes any tilt still in progress while the plane fades in
+  function showPlane(){
+    document.querySelectorAll("#s2 li.later").forEach(function(li){ li.classList.add("shown"); });
+    var t0 = view.tilt, a0 = view.az, done = t0 >= TILT - 1e-6;
+    tween(done ? 900 : 1500, function(e){
+      if(!done){ view.tilt = t0 + (TILT - t0)*e; view.az = a0 + (AZ - a0)*e; }
+      view.plane = e; draw3D(view.tilt, view.az, e);
+    });
+  }
+
+  // drag to rotate the 3D view
+  var drag = null;
+  C2.c.addEventListener("pointerdown", function(e){ drag = {x:e.clientX, y:e.clientY, tilt:view.tilt, az:view.az}; C2.c.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  C2.c.addEventListener("pointermove", function(e){
+    if(!drag) return;
+    if(anim){ cancelAnimationFrame(anim.id); anim = null; }
+    view.az = drag.az + (e.clientX - drag.x) * 0.008;
+    view.tilt = Math.max(0, Math.min(Math.PI/2 - 0.05, drag.tilt + (e.clientY - drag.y) * 0.006));
+    draw3D(view.tilt, view.az, view.plane);
+  });
+  C2.c.addEventListener("pointerup", function(){ drag = null; });
+  C2.c.addEventListener("click", function(e){ e.stopPropagation(); });
+  document.getElementById("replay").addEventListener("click", function(e){ e.stopPropagation(); e.target.blur(); playLift(); });
+
+  /* ---------- slide control ---------- */
+  var slides = document.querySelectorAll(".slide"), cur = 0;
+  var nSteps = [1, 2, 2, 1], steps = [0, 0, 0, 0];
+  function enter(k){
+    if(k === 1){ steps[1] = 0; document.querySelectorAll("#s1 li.later").forEach(function(li){ li.classList.remove("shown"); }); drawProblem(0); }
+    if(k === 2){ playLift(); }
+    if(k === 3){ tween(1400, drawBack); }
+  }
+  function show(k){
+    cur = Math.max(0, Math.min(slides.length-1, k));
+    slides.forEach(function(s, j){ s.classList.toggle("on", j === cur); });
+    document.getElementById("num").textContent = cur + 1;
+    enter(cur);
+  }
+  function next(){
+    if(steps[cur] + 1 < nSteps[cur]){
+      steps[cur]++;
+      if(cur === 1){ document.querySelectorAll("#s1 li.later").forEach(function(li){ li.classList.add("shown"); }); tween(1100, drawProblem); }
+      if(cur === 2){ showPlane(); }
+    } else if(cur < slides.length-1) show(cur+1);
+  }
+  function prev(){ if(cur > 0) show(cur-1); }
+  document.addEventListener("keydown", function(e){
+    if(["ArrowRight","ArrowDown","PageDown"," ","Enter"].indexOf(e.key) >= 0){ e.preventDefault(); next(); }
+    else if(["ArrowLeft","ArrowUp","PageUp","Backspace"].indexOf(e.key) >= 0){ e.preventDefault(); prev(); }
+    else if(e.key === "r" || e.key === "R"){ enter(cur); }
+    else if(e.key === "Home"){ show(0); }
+  });
+  stage.addEventListener("click", next);
+
+  drawProblem(0); draw3D(0, 0, 0); drawBack(1);
+  document.fonts && document.fonts.ready.then(function(){ if(cur === 0){ drawProblem(0); draw3D(0,0,0); drawBack(1); } });
+  show(0);
+})();
+</script>
+</body>
+</html>
